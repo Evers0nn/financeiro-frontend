@@ -18,7 +18,7 @@ const INCOME_CATEGORIES = ['Salário', 'Freelance', 'Rendimento', 'Vendas', 'Out
 const EXPENSE_CATEGORIES = ['Ifood', 'Roupas', 'Mercado', 'Deslocamento', 'Contas', 'Lazer'];
 const CREDIT_CARDS = ['Nubank', 'Inter', 'Itaú'];
 
-// ⚠️ URL REAL DO SEU BACKEND NO RENDER
+// URL REAL DO SEU BACKEND NO RENDER
 const API_URL = 'https://financeiro-backend-7pzo.onrender.com/api'; 
 
 // ==========================================
@@ -27,16 +27,61 @@ const API_URL = 'https://financeiro-backend-7pzo.onrender.com/api';
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if(email) onLogin({ id: email, name: email.split('@')[0], email });
+  // Busca se já existem e-mails salvos anteriormente
+  const [savedAccounts, setSavedAccounts] = useState(() => {
+    try {
+      const accounts = localStorage.getItem('fincontrol_accounts');
+      return accounts ? JSON.parse(accounts) : [];
+    } catch(e) {
+      return [];
+    }
+  });
+  
+  const handleLogin = (e, quickEmail = null) => {
+    if(e) e.preventDefault();
+    const finalEmail = quickEmail || email;
+    
+    if(finalEmail) {
+      // Salva o novo e-mail na lista de contas recentes sem duplicar
+      try {
+        const updatedAccounts = [...new Set([...savedAccounts, finalEmail])];
+        localStorage.setItem('fincontrol_accounts', JSON.stringify(updatedAccounts));
+      } catch(e) {
+        console.warn("Modo privado: não salvou na lista de contas.");
+      }
+      
+      onLogin({ id: finalEmail, name: finalEmail.split('@')[0], email: finalEmail });
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F2F2EB] p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F2F2EB] p-4">
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md animate-fadeIn">
         <h1 className="text-3xl font-bold text-center text-[#033859] mb-8">FinControl</h1>
+        
+        {/* Mostra as contas salvas como botões rápidos, se existirem */}
+        {savedAccounts.length > 0 && (
+          <div className="mb-6 pb-6 border-b border-[#84BFB9]">
+            <p className="text-sm text-center text-[#025E73] mb-3">Acessar com conta salva:</p>
+            <div className="space-y-2">
+              {savedAccounts.map((acc, idx) => (
+                <button 
+                  key={idx} 
+                  onClick={() => handleLogin(null, acc)}
+                  className="w-full bg-[#F2F2EB] hover:bg-[#84BFB9] hover:text-white text-[#033859] border border-[#84BFB9] p-3 rounded-lg transition flex items-center justify-center gap-2 font-medium"
+                >
+                  <div className="w-6 h-6 bg-[#038C8C] rounded-full flex items-center justify-center text-xs text-white uppercase">
+                    {acc.charAt(0)}
+                  </div>
+                  {acc}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-4">
+          <p className="text-sm text-center text-[#025E73] font-medium">Ou entre com uma nova conta</p>
           <div>
             <label className="block text-sm font-medium text-[#025E73] mb-1">E-mail</label>
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 border border-[#84BFB9] rounded-lg outline-none focus:border-[#038C8C]" placeholder="seu@email.com" />
@@ -405,7 +450,6 @@ function CreditCardSummary() {
 export default function App() {
   const [user, setUser] = useState(() => {
     try {
-      // Tenta ler o armazenamento. Se o modo privado bloquear, cai no catch silencioso.
       const savedUser = localStorage.getItem('fincontrol_user');
       return savedUser ? JSON.parse(savedUser) : null;
     } catch (error) {
