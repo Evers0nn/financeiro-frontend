@@ -18,8 +18,8 @@ const INCOME_CATEGORIES = ['Salário', 'Freelance', 'Rendimento', 'Vendas', 'Out
 const EXPENSE_CATEGORIES = ['Ifood', 'Roupas', 'Mercado', 'Deslocamento', 'Contas', 'Lazer'];
 const CREDIT_CARDS = ['Nubank', 'Inter', 'Itaú'];
 
-// ⚠️ IMPORTANTE: Cole aqui a URL gerada pelo Render para o seu backend Python
-const API_URL = 'https://financeiro-backend-7pzo.onrender.com'; 
+// ⚠️ URL REAL DO SEU BACKEND NO RENDER
+const API_URL = 'https://financeiro-backend-7pzo.onrender.com/api'; 
 
 // ==========================================
 // COMPONENTE: TELA DE LOGIN
@@ -404,19 +404,32 @@ function CreditCardSummary() {
 // ==========================================
 export default function App() {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('fincontrol_user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      // Tenta ler o armazenamento. Se o modo privado bloquear, cai no catch silencioso.
+      const savedUser = localStorage.getItem('fincontrol_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (error) {
+      return null;
+    }
   });
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const handleLogin = (userData) => {
     setUser(userData);
-    localStorage.setItem('fincontrol_user', JSON.stringify(userData));
+    try {
+      localStorage.setItem('fincontrol_user', JSON.stringify(userData));
+    } catch (error) {
+      console.warn("Modo privado: não foi possível salvar o login no localStorage.");
+    }
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('fincontrol_user');
+    try {
+      localStorage.removeItem('fincontrol_user');
+    } catch (error) {
+      console.warn("Modo privado: não foi possível limpar o localStorage.");
+    }
   };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
