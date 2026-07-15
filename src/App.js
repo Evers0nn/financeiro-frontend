@@ -18,7 +18,7 @@ const INCOME_CATEGORIES = ['Salário', 'Freelance', 'Rendimento', 'Vendas', 'Out
 const EXPENSE_CATEGORIES = ['Ifood', 'Roupas', 'Mercado', 'Deslocamento', 'Contas', 'Lazer'];
 const CREDIT_CARDS = ['Nubank', 'Inter', 'Itaú'];
 
-// URL REAL DO SEU BACKEND NO RENDER
+// URL DO SEU BACKEND NO RENDER
 const API_URL = 'https://financeiro-backend-7pzo.onrender.com/api'; 
 
 // ==========================================
@@ -103,8 +103,6 @@ function Dashboard({ user }) {
   const [selectedTx, setSelectedTx] = useState(null);
   
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0 });
-  
-  // Arrays agora iniciam vazios (sem dados de mentirinha)
   const [transactions, setTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
   
@@ -117,15 +115,43 @@ function Dashboard({ user }) {
         const month = currentDate.getMonth() + 1;
         const year = currentDate.getFullYear();
         
+        // 1. Resumo numérico do saldo
         const resDash = await fetch(`${API_URL}/dashboard?user_id=${user.id}&month=${month}&year=${year}`);
         if(resDash.ok) {
           const data = await resDash.json();
           setSummary(data);
         }
-        
-        // No futuro, faremos um fetch real para as transações aqui
+
+        // 2. Transações reais listadas na tela
+        const resTx = await fetch(`${API_URL}/transactions?user_id=${user.id}&month=${month}&year=${year}`);
+        if(resTx.ok) {
+          const data = await resTx.json();
+          const mapped = data.map(t => {
+            const hasDetails = t.description.includes(' - ');
+            return {
+              id: t.id,
+              type: t.type,
+              name: hasDetails ? t.description.split(' - ')[0] : t.description,
+              desc: hasDetails ? t.description.split(' - ')[1] : '',
+              cat: t.category_id,
+              val: t.type === 'expense' ? -parseFloat(t.amount) : parseFloat(t.amount),
+              date: t.transaction_date.split('-').reverse().slice(0, 2).join('/'), // DD/MM
+              isCard: t.payment_method === 'credit',
+              cardName: t.credit_card_id,
+              installment: t.installment_current && t.installment_total ? `${t.installment_current}/${t.installment_total}` : '1/1'
+            };
+          });
+          setTransactions(mapped);
+        }
+
+        // 3. Resumo por categoria (gráfico)
+        const resCat = await fetch(`${API_URL}/categories/summary?user_id=${user.id}&month=${month}&year=${year}`);
+        if(resCat.ok) {
+          const data = await resCat.json();
+          setChartData(data);
+        }
       } catch (error) {
-        console.error("Erro ao buscar dados:", error);
+        console.error("Erro ao buscar dados do dashboard:", error);
       }
     };
     fetchData();
@@ -145,6 +171,14 @@ function Dashboard({ user }) {
         <div className="bg-[#033859] text-[#F2F2EB] p-5 rounded-xl shadow-md">
           <p className="text-sm opacity-80 mb-1">Saldo Atual</p>
           <p className="text-3xl font-bold">R$ {summary.balance.toFixed(2)}</p>
+        </div>
+        <div className="bg-[#038C8C] text-white p-5 rounded-xl shadow-md">
+          <p className="text-sm opacity-80 mb-1">Entradas</p>
+          <p className="text-3xl font-bold">R$ {summary.totalIncome.toFixed(2)}</p>
+        </div>
+        <div className="bg-white border-2 border-[#84BFB9] text-[#033859] p-5 rounded-xl shadow-md">
+          <p className="text-sm opacity-80 mb-1 text-[#025E73]">Saídas</p>
+          <p className="text-3xl font-bold text-red-500">R$ {summary.totalExpense.toFixed(2)}</p>
         </div>
       </div>
 
@@ -180,7 +214,6 @@ function Dashboard({ user }) {
 
       <div className="bg-white p-6 rounded-xl shadow-sm">
         <h3 className="text-lg font-bold mb-4 text-[#033859]">Transações do Mês</h3>
-        
         {transactions.length > 0 ? (
           <div className="space-y-3">
             {transactions.map(t => (
@@ -385,15 +418,30 @@ function Expenses({ user }) {
 // ==========================================
 // COMPONENTE: RESUMO DE CARTÕES
 // ==========================================
-function CreditCardSummary() {
+function CreditCardSummary({ user }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [expandedCard, setExpandedCard] = useState(null);
-  
-  // Arrays agora iniciam vazios
   const [cards, setCards] = useState([]);
   
   const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+
+  useEffect(() => {
+    const fetchCards = async () => {
+      try {
+        const month = currentMonth.getMonth() + 1;
+        const year = currentMonth.getFullYear();
+        const res = await fetch(`${API_URL}/credit-cards/summary?user_id=${user.id}&month=${month}&year=${year}`);
+        if(res.ok) {
+          const data = await res.json();
+          setCards(data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar faturas de cartões:", error);
+      }
+    };
+    fetchCards();
+  }, [currentMonth, user.id]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
