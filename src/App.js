@@ -27,7 +27,6 @@ const API_URL = 'https://financeiro-backend-7pzo.onrender.com/api';
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   
-  // Busca se já existem e-mails salvos anteriormente
   const [savedAccounts, setSavedAccounts] = useState(() => {
     try {
       const accounts = localStorage.getItem('fincontrol_accounts');
@@ -42,14 +41,12 @@ function LoginScreen({ onLogin }) {
     const finalEmail = quickEmail || email;
     
     if(finalEmail) {
-      // Salva o novo e-mail na lista de contas recentes sem duplicar
       try {
         const updatedAccounts = [...new Set([...savedAccounts, finalEmail])];
         localStorage.setItem('fincontrol_accounts', JSON.stringify(updatedAccounts));
       } catch(e) {
         console.warn("Modo privado: não salvou na lista de contas.");
       }
-      
       onLogin({ id: finalEmail, name: finalEmail.split('@')[0], email: finalEmail });
     }
   };
@@ -59,7 +56,6 @@ function LoginScreen({ onLogin }) {
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md animate-fadeIn">
         <h1 className="text-3xl font-bold text-center text-[#033859] mb-8">FinControl</h1>
         
-        {/* Mostra as contas salvas como botões rápidos, se existirem */}
         {savedAccounts.length > 0 && (
           <div className="mb-6 pb-6 border-b border-[#84BFB9]">
             <p className="text-sm text-center text-[#025E73] mb-3">Acessar com conta salva:</p>
@@ -108,6 +104,10 @@ function Dashboard({ user }) {
   
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0 });
   
+  // Arrays agora iniciam vazios (sem dados de mentirinha)
+  const [transactions, setTransactions] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
@@ -122,24 +122,14 @@ function Dashboard({ user }) {
           const data = await resDash.json();
           setSummary(data);
         }
+        
+        // No futuro, faremos um fetch real para as transações aqui
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
       }
     };
     fetchData();
   }, [currentDate, user.id]);
-
-  const chartData = [
-    { name: 'Ifood', value: 250 }, { name: 'Roupas', value: 150 },
-    { name: 'Mercado', value: 800 }, { name: 'Deslocamento', value: 350 },
-  ];
-
-  const transactions = [
-    { id: 1, type: 'expense', name: 'Compra do Mês', desc: 'Arroz, feijão e carnes', cat: 'Mercado', val: -800.00, date: '10/05', isCard: true, cardName: 'Nubank', installment: '1/1' },
-    { id: 2, type: 'income', name: 'Salário', desc: '', cat: 'Salário', val: 4000.00, date: '05/05', isCard: false },
-    { id: 3, type: 'expense', name: 'Uber para faculdade', desc: '', cat: 'Deslocamento', val: -35.50, date: '02/05', isCard: false },
-    { id: 4, type: 'expense', name: 'Tênis Nike', desc: 'Presente de aniversário', cat: 'Roupas', val: -150.00, date: '01/05', isCard: true, cardName: 'Inter', installment: '3/6' },
-  ];
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -160,60 +150,71 @@ function Dashboard({ user }) {
 
       <div className="bg-white p-6 rounded-xl shadow-sm">
         <h3 className="text-lg font-bold mb-4 text-[#033859]">Gastos por Categoria</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={chartData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={5} dataKey="value">
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => `R$ ${value}`} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex flex-wrap justify-center gap-4 mt-4">
-          {chartData.map((entry, index) => (
-            <div key={entry.name} className="flex items-center text-sm font-medium text-[#033859]">
-              <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}></span>
-              {entry.name}
+        {chartData.length > 0 ? (
+          <>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={5} dataKey="value">
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `R$ ${value}`} />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-          ))}
-        </div>
+            <div className="flex flex-wrap justify-center gap-4 mt-4">
+              {chartData.map((entry, index) => (
+                <div key={entry.name} className="flex items-center text-sm font-medium text-[#033859]">
+                  <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}></span>
+                  {entry.name}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhum gasto registrado neste mês.</p>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm">
         <h3 className="text-lg font-bold mb-4 text-[#033859]">Transações do Mês</h3>
-        <div className="space-y-3">
-          {transactions.map(t => (
-            <div key={t.id} className="border-b pb-2 cursor-pointer hover:bg-gray-50 rounded p-2 transition" onClick={() => setSelectedTx(selectedTx === t.id ? null : t.id)}>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-semibold text-[#033859]">{t.name}</p>
-                  <p className="text-xs text-[#025E73]">{t.cat} • {t.date}</p>
+        
+        {transactions.length > 0 ? (
+          <div className="space-y-3">
+            {transactions.map(t => (
+              <div key={t.id} className="border-b pb-2 cursor-pointer hover:bg-gray-50 rounded p-2 transition" onClick={() => setSelectedTx(selectedTx === t.id ? null : t.id)}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-[#033859]">{t.name}</p>
+                    <p className="text-xs text-[#025E73]">{t.cat} • {t.date}</p>
+                  </div>
+                  <p className={`font-bold ${t.val > 0 ? 'text-[#038C8C]' : 'text-red-500'}`}>
+                    {t.val > 0 ? '+' : ''} R$ {Math.abs(t.val).toFixed(2)}
+                  </p>
                 </div>
-                <p className={`font-bold ${t.val > 0 ? 'text-[#038C8C]' : 'text-red-500'}`}>
-                  {t.val > 0 ? '+' : ''} R$ {Math.abs(t.val).toFixed(2)}
-                </p>
+                
+                {selectedTx === t.id && (
+                  <div className="mt-3 p-3 bg-[#F2F2EB] rounded-lg text-sm text-[#025E73] space-y-1 border border-[#84BFB9] animate-fadeIn">
+                    {t.desc && <p><span className="font-bold">Descrição:</span> {t.desc}</p>}
+                    <p><span className="font-bold">Categoria:</span> {t.cat}</p>
+                    {t.isCard ? (
+                      <>
+                        <p><span className="font-bold">Pagamento:</span> Cartão de Crédito ({t.cardName})</p>
+                        <p><span className="font-bold">Parcela:</span> {t.installment}</p>
+                      </>
+                    ) : (
+                      <p><span className="font-bold">Pagamento:</span> À vista</p>
+                    )}
+                  </div>
+                )}
               </div>
-              
-              {selectedTx === t.id && (
-                <div className="mt-3 p-3 bg-[#F2F2EB] rounded-lg text-sm text-[#025E73] space-y-1 border border-[#84BFB9] animate-fadeIn">
-                  {t.desc && <p><span className="font-bold">Descrição:</span> {t.desc}</p>}
-                  <p><span className="font-bold">Categoria:</span> {t.cat}</p>
-                  {t.isCard ? (
-                    <>
-                      <p><span className="font-bold">Pagamento:</span> Cartão de Crédito ({t.cardName})</p>
-                      <p><span className="font-bold">Parcela:</span> {t.installment}</p>
-                    </>
-                  ) : (
-                    <p><span className="font-bold">Pagamento:</span> À vista</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhuma transação registrada neste mês.</p>
+        )}
       </div>
     </div>
   );
@@ -388,19 +389,11 @@ function CreditCardSummary() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [expandedCard, setExpandedCard] = useState(null);
   
+  // Arrays agora iniciam vazios
+  const [cards, setCards] = useState([]);
+  
   const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-
-  const cards = [
-    { 
-      name: 'Nubank', total: 850.50, color: 'border-purple-500', 
-      items: [{ desc: 'Mercado', val: 800.00, inst: '1/1' }, { desc: 'Netflix', val: 50.50, inst: '1/1' }]
-    },
-    { 
-      name: 'Inter', total: 150.00, color: 'border-orange-500', 
-      items: [{ desc: 'Tênis Nike', val: 150.00, inst: '3/6' }]
-    }
-  ];
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -413,32 +406,36 @@ function CreditCardSummary() {
       </div>
 
       <div className="space-y-4">
-        {cards.map(card => (
-          <div key={card.name} className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div 
-              className={`flex justify-between items-center p-4 border-l-4 ${card.color} cursor-pointer hover:bg-gray-50`}
-              onClick={() => setExpandedCard(expandedCard === card.name ? null : card.name)}
-            >
-              <div>
-                <p className="font-bold text-[#033859]">{card.name}</p>
-                <p className="text-xs text-[#025E73]">Ver compras do mês</p>
+        {cards.length > 0 ? (
+          cards.map(card => (
+            <div key={card.name} className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div 
+                className={`flex justify-between items-center p-4 border-l-4 ${card.color} cursor-pointer hover:bg-gray-50`}
+                onClick={() => setExpandedCard(expandedCard === card.name ? null : card.name)}
+              >
+                <div>
+                  <p className="font-bold text-[#033859]">{card.name}</p>
+                  <p className="text-xs text-[#025E73]">Ver compras do mês</p>
+                </div>
+                <p className="text-xl font-bold text-red-600">R$ {card.total.toFixed(2)}</p>
               </div>
-              <p className="text-xl font-bold text-red-600">R$ {card.total.toFixed(2)}</p>
+              
+              {expandedCard === card.name && (
+                <div className="bg-[#F2F2EB] p-4 border-t border-gray-200 animate-fadeIn">
+                  <h4 className="text-sm font-bold text-[#033859] mb-2 border-b border-[#84BFB9] pb-1">Detalhes da Fatura</h4>
+                  {card.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm py-1">
+                      <span className="text-[#025E73]">{item.desc} <span className="text-xs opacity-70">({item.inst})</span></span>
+                      <span className="font-semibold text-red-600">R$ {item.val.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            
-            {expandedCard === card.name && (
-              <div className="bg-[#F2F2EB] p-4 border-t border-gray-200 animate-fadeIn">
-                <h4 className="text-sm font-bold text-[#033859] mb-2 border-b border-[#84BFB9] pb-1">Detalhes da Fatura</h4>
-                {card.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-sm py-1">
-                    <span className="text-[#025E73]">{item.desc} <span className="text-xs opacity-70">({item.inst})</span></span>
-                    <span className="font-semibold text-red-600">R$ {item.val.toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+          ))
+        ) : (
+          <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhuma fatura encontrada neste mês.</p>
+        )}
       </div>
     </div>
   );
