@@ -54,12 +54,25 @@ export default function CreditCardSummary({ user }) {
 
   return (
     <div className="space-y-6">
+      
+      {/* Cabeçalho de Navegação Limpo */}
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <button onClick={prevPeriod} className="p-2 text-[#025E73]"><ChevronLeft /></button>
-        <h2 className="text-lg font-bold capitalize text-[#033859] text-center">
-          Faturas: {periodDisplay} <br/> <span className="text-xs font-normal text-gray-500">{displayDates}</span>
-        </h2>
-        <button onClick={nextPeriod} className="p-2 text-[#025E73]"><ChevronRight /></button>
+        <button onClick={prevPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition">
+          <ChevronLeft size={24} />
+        </button>
+        
+        <div className="text-center">
+          <h2 className="text-lg font-bold capitalize text-[#033859]">
+            Faturas: {periodDisplay}
+          </h2>
+          <p className="text-xs font-medium text-gray-500 mt-1">
+            {displayDates}
+          </p>
+        </div>
+
+        <button onClick={nextPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition">
+          <ChevronRight size={24} />
+        </button>
       </div>
 
       <div className="space-y-4">
