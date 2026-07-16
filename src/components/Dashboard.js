@@ -4,7 +4,6 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { API_URL, CHART_COLORS } from '../utils/constants';
 
 export default function Dashboard({ user }) {
-  // Nova lógica 100% matemática para evitar bugs de fuso horário
   const getInitialCycle = () => {
     const today = new Date();
     let m = today.getMonth() + 1; 
@@ -24,7 +23,6 @@ export default function Dashboard({ user }) {
   const [editForm, setEditForm] = useState({});
   const [categories, setCategories] = useState([]);
 
-  // Navegação matemática segura
   const prevPeriod = () => {
     setCycle(prev => {
       let m = prev.month - 1;
@@ -43,7 +41,6 @@ export default function Dashboard({ user }) {
     });
   };
 
-  // Cálculo das datas exatas em formato de texto para enviar ao servidor
   let prevMonth = cycle.month - 1;
   let prevYear = cycle.year;
   if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
@@ -51,7 +48,6 @@ export default function Dashboard({ user }) {
   const startStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-04`;
   const endStr = `${cycle.year}-${String(cycle.month).padStart(2, '0')}-03`;
 
-  // Textos para o ecrã
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const periodDisplay = `${monthNames[prevMonth - 1]} a ${monthNames[cycle.month - 1]}`;
   const displayDates = `04/${String(prevMonth).padStart(2, '0')}/${prevYear} até 03/${String(cycle.month).padStart(2, '0')}/${cycle.year}`;
@@ -96,7 +92,6 @@ export default function Dashboard({ user }) {
     }
   };
 
-  // O React agora observa a mudança dos números puros para atualizar a tela
   useEffect(() => { loadData(); }, [cycle.month, cycle.year, user.id]);
 
   const saveEdit = async (id) => {
@@ -112,12 +107,25 @@ export default function Dashboard({ user }) {
 
   return (
     <div className="space-y-6 animate-fadeIn">
+      
+      {/* Cabeçalho de Navegação Limpo */}
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <button onClick={prevPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition"><ChevronLeft size={24} /></button>
-        <h2 className="text-lg font-bold capitalize text-[#033859] text-center">
-          {periodDisplay} <br/> <span className="text-xs font-normal text-gray-500">{displayDates}</span>
-        </h2>
-        <button onClick={nextPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition"><ChevronRight size={24} /></button>
+        <button onClick={prevPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition">
+          <ChevronLeft size={24} />
+        </button>
+        
+        <div className="text-center">
+          <h2 className="text-lg font-bold capitalize text-[#033859]">
+            {periodDisplay}
+          </h2>
+          <p className="text-xs font-medium text-gray-500 mt-1">
+            {displayDates}
+          </p>
+        </div>
+
+        <button onClick={nextPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition">
+          <ChevronRight size={24} />
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
