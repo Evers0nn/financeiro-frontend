@@ -3,22 +3,22 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { API_URL } from '../utils/constants';
 
 export default function CreditCardSummary({ user }) {
-  // Mesma lógica de ciclo do Dashboard
   const getInitialDate = () => {
     const today = new Date();
-    if (today.getDate() > 15) today.setMonth(today.getMonth() + 1);
+    if (today.getDate() > 3) today.setMonth(today.getMonth() + 1);
     return today;
   };
 
   const [targetDate, setTargetDate] = useState(getInitialDate());
   const [cards, setCards] = useState([]);
-  const [expandedCard, setExpandedCard] = useState(null); // Controla qual cartão foi clicado
+  const [expandedCard, setExpandedCard] = useState(null); 
   
   const prevPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1));
   const nextPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1));
 
-  const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 16);
-  const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 15);
+  // Novo Ciclo: Dia 4 ao Dia 3
+  const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 4);
+  const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 3);
   
   const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const startStr = formatDate(startDate);
@@ -33,7 +33,7 @@ export default function CreditCardSummary({ user }) {
   }, [targetDate, user.id]);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <button onClick={prevPeriod} className="p-2 text-[#025E73]"><ChevronLeft /></button>
         <h2 className="text-lg font-bold capitalize text-[#033859] text-center">
@@ -46,7 +46,6 @@ export default function CreditCardSummary({ user }) {
         {cards.length > 0 ? (
           cards.map(card => (
             <div key={card.name} className="bg-white rounded-lg shadow-sm overflow-hidden">
-              {/* O evento onClick abre e fecha os gastos específicos do cartão clicado */}
               <div 
                 className={`flex justify-between items-center p-4 border-l-4 ${card.color} cursor-pointer hover:bg-gray-50`}
                 onClick={() => setExpandedCard(expandedCard === card.name ? null : card.name)}
@@ -58,7 +57,6 @@ export default function CreditCardSummary({ user }) {
                 <p className="text-xl font-bold text-red-600">R$ {card.total.toFixed(2)}</p>
               </div>
               
-              {/* Exibe os detalhes apenas se o cartão for o que está selecionado */}
               {expandedCard === card.name && (
                 <div className="bg-[#F2F2EB] p-4 border-t border-gray-200 animate-fadeIn">
                   <h4 className="text-sm font-bold text-[#033859] mb-2 border-b border-[#84BFB9] pb-1">Despesas no Ciclo</h4>
