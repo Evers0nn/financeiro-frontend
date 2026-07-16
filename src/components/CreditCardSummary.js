@@ -3,41 +3,61 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { API_URL } from '../utils/constants';
 
 export default function CreditCardSummary({ user }) {
-  const getInitialDate = () => {
+  const getInitialCycle = () => {
     const today = new Date();
-    if (today.getDate() > 3) today.setMonth(today.getMonth() + 1);
-    return today;
+    let m = today.getMonth() + 1; 
+    let y = today.getFullYear();
+    if (today.getDate() > 3) {
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+    return { month: m, year: y };
   };
 
-  const [targetDate, setTargetDate] = useState(getInitialDate());
+  const [cycle, setCycle] = useState(getInitialCycle());
   const [cards, setCards] = useState([]);
   const [expandedCard, setExpandedCard] = useState(null); 
   
-  const prevPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1));
-  const nextPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1));
+  const prevPeriod = () => {
+    setCycle(prev => {
+      let m = prev.month - 1;
+      let y = prev.year;
+      if (m < 1) { m = 12; y -= 1; }
+      return { month: m, year: y };
+    });
+  };
 
-  // Novo Ciclo: Dia 4 ao Dia 3
-  const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 4);
-  const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 3);
-  
-  const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const startStr = formatDate(startDate);
-  const endStr = formatDate(endDate);
+  const nextPeriod = () => {
+    setCycle(prev => {
+      let m = prev.month + 1;
+      let y = prev.year;
+      if (m > 12) { m = 1; y += 1; }
+      return { month: m, year: y };
+    });
+  };
+
+  let prevMonth = cycle.month - 1;
+  let prevYear = cycle.year;
+  if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
+
+  const startStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-04`;
+  const endStr = `${cycle.year}-${String(cycle.month).padStart(2, '0')}-03`;
 
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const periodDisplay = `${monthNames[startDate.getMonth()]} a ${monthNames[endDate.getMonth()]}`;
+  const periodDisplay = `${monthNames[prevMonth - 1]} a ${monthNames[cycle.month - 1]}`;
+  const displayDates = `04/${String(prevMonth).padStart(2, '0')}/${prevYear} até 03/${String(cycle.month).padStart(2, '0')}/${cycle.year}`;
 
   useEffect(() => {
     fetch(`${API_URL}/credit-cards/summary?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`)
       .then(r => r.json()).then(d => setCards(d)).catch(()=>{});
-  }, [targetDate, user.id]);
+  }, [cycle.month, cycle.year, user.id]);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <button onClick={prevPeriod} className="p-2 text-[#025E73]"><ChevronLeft /></button>
         <h2 className="text-lg font-bold capitalize text-[#033859] text-center">
-          Faturas: {periodDisplay} <br/> <span className="text-xs font-normal text-gray-500">{startDate.toLocaleDateString('pt-BR')} até {endDate.toLocaleDateString('pt-BR')}</span>
+          Faturas: {periodDisplay} <br/> <span className="text-xs font-normal text-gray-500">{displayDates}</span>
         </h2>
         <button onClick={nextPeriod} className="p-2 text-[#025E73]"><ChevronRight /></button>
       </div>
