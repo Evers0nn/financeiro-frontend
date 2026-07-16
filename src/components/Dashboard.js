@@ -4,14 +4,19 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { API_URL, CHART_COLORS } from '../utils/constants';
 
 export default function Dashboard({ user }) {
-  // Lógica do novo ciclo: se o dia atual for maior que 3, já pertence ao próximo ciclo (fecho do mês seguinte)
-  const getInitialDate = () => {
+  // Nova lógica 100% matemática para evitar bugs de fuso horário
+  const getInitialCycle = () => {
     const today = new Date();
-    if (today.getDate() > 3) today.setMonth(today.getMonth() + 1);
-    return today;
+    let m = today.getMonth() + 1; 
+    let y = today.getFullYear();
+    if (today.getDate() > 3) {
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+    return { month: m, year: y };
   };
 
-  const [targetDate, setTargetDate] = useState(getInitialDate());
+  const [cycle, setCycle] = useState(getInitialCycle());
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0 });
   const [transactions, setTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
@@ -19,26 +24,40 @@ export default function Dashboard({ user }) {
   const [editForm, setEditForm] = useState({});
   const [categories, setCategories] = useState([]);
 
-  // Navegação de ciclos
-  const prevPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1));
-  const nextPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1));
+  // Navegação matemática segura
+  const prevPeriod = () => {
+    setCycle(prev => {
+      let m = prev.month - 1;
+      let y = prev.year;
+      if (m < 1) { m = 12; y -= 1; }
+      return { month: m, year: y };
+    });
+  };
 
-  // Novo Ciclo: Do dia 4 do mês anterior ao dia 3 do mês alvo
-  const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 4);
-  const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 3);
-  
-  // Formatando para YYYY-MM-DD para o backend
-  const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const startStr = formatDate(startDate);
-  const endStr = formatDate(endDate);
+  const nextPeriod = () => {
+    setCycle(prev => {
+      let m = prev.month + 1;
+      let y = prev.year;
+      if (m > 12) { m = 1; y += 1; }
+      return { month: m, year: y };
+    });
+  };
 
-  // Texto visual do período
+  // Cálculo das datas exatas em formato de texto para enviar ao servidor
+  let prevMonth = cycle.month - 1;
+  let prevYear = cycle.year;
+  if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
+
+  const startStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-04`;
+  const endStr = `${cycle.year}-${String(cycle.month).padStart(2, '0')}-03`;
+
+  // Textos para o ecrã
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const periodDisplay = `${monthNames[startDate.getMonth()]} a ${monthNames[endDate.getMonth()]}`;
+  const periodDisplay = `${monthNames[prevMonth - 1]} a ${monthNames[cycle.month - 1]}`;
+  const displayDates = `04/${String(prevMonth).padStart(2, '0')}/${prevYear} até 03/${String(cycle.month).padStart(2, '0')}/${cycle.year}`;
 
   const loadData = async () => {
     try {
-      // 🚀 OTIMIZAÇÃO: Fazemos todas as pesquisas ao servidor ao mesmo tempo!
       const [resDash, resTx, resCat, resAllCat] = await Promise.all([
         fetch(`${API_URL}/dashboard?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`),
         fetch(`${API_URL}/transactions?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`),
@@ -58,7 +77,7 @@ export default function Dashboard({ user }) {
       if(resTx.ok) {
         const data = await resTx.json();
         const mapped = data.map(t => {
-          const hasDetails = t.description.includes(' - ');
+          const hasDetails = t.description && t.description.includes(' - ');
           return {
             ...t,
             name: hasDetails ? t.description.split(' - ')[0] : t.description,
@@ -77,7 +96,8 @@ export default function Dashboard({ user }) {
     }
   };
 
-  useEffect(() => { loadData(); }, [targetDate, user.id]);
+  // O React agora observa a mudança dos números puros para atualizar a tela
+  useEffect(() => { loadData(); }, [cycle.month, cycle.year, user.id]);
 
   const saveEdit = async (id) => {
     const finalDescription = editForm.desc ? `${editForm.name} - ${editForm.desc}` : editForm.name;
@@ -95,7 +115,7 @@ export default function Dashboard({ user }) {
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <button onClick={prevPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition"><ChevronLeft size={24} /></button>
         <h2 className="text-lg font-bold capitalize text-[#033859] text-center">
-          {periodDisplay} <br/> <span className="text-xs font-normal text-gray-500">{startDate.toLocaleDateString('pt-BR')} até {endDate.toLocaleDateString('pt-BR')}</span>
+          {periodDisplay} <br/> <span className="text-xs font-normal text-gray-500">{displayDates}</span>
         </h2>
         <button onClick={nextPeriod} className="p-2 text-[#025E73] hover:bg-[#84BFB9] rounded-full transition"><ChevronRight size={24} /></button>
       </div>
