@@ -4,10 +4,10 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { API_URL, CHART_COLORS } from '../utils/constants';
 
 export default function Dashboard({ user }) {
-  // Lógica inteligente de ciclo: se dia atual > 15, joga para o próximo mês
+  // Lógica do novo ciclo: se o dia atual for maior que 3, já pertence ao próximo ciclo (fecho do mês seguinte)
   const getInitialDate = () => {
     const today = new Date();
-    if (today.getDate() > 15) today.setMonth(today.getMonth() + 1);
+    if (today.getDate() > 3) today.setMonth(today.getMonth() + 1);
     return today;
   };
 
@@ -23,43 +23,58 @@ export default function Dashboard({ user }) {
   const prevPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1));
   const nextPeriod = () => setTargetDate(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1));
 
-  // Calculando as datas do período (dia 16 do mês anterior até dia 15 do mês alvo)
-  const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 16);
-  const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 15);
+  // Novo Ciclo: Do dia 4 do mês anterior ao dia 3 do mês alvo
+  const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 4);
+  const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 3);
   
   // Formatando para YYYY-MM-DD para o backend
   const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const startStr = formatDate(startDate);
   const endStr = formatDate(endDate);
 
-  // Texto visual do mês (ex: Julho a Agosto)
+  // Texto visual do período
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const periodDisplay = `${monthNames[startDate.getMonth()]} a ${monthNames[endDate.getMonth()]}`;
 
   const loadData = async () => {
-    const resDash = await fetch(`${API_URL}/dashboard?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`);
-    if(resDash.ok) setSummary(await resDash.json());
+    try {
+      // 🚀 OTIMIZAÇÃO: Fazemos todas as pesquisas ao servidor ao mesmo tempo!
+      const [resDash, resTx, resCat, resAllCat] = await Promise.all([
+        fetch(`${API_URL}/dashboard?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`),
+        fetch(`${API_URL}/transactions?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`),
+        fetch(`${API_URL}/categories/summary?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`),
+        fetch(`${API_URL}/config/categories`)
+      ]);
 
-    const resTx = await fetch(`${API_URL}/transactions?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`);
-    if(resTx.ok) {
-      const data = await resTx.json();
-      const mapped = data.map(t => {
-        const hasDetails = t.description.includes(' - ');
-        return {
-          ...t,
-          name: hasDetails ? t.description.split(' - ')[0] : t.description,
-          desc: hasDetails ? t.description.substring(t.description.indexOf(' - ') + 3) : '',
-          val: t.type === 'expense' ? -parseFloat(t.amount) : parseFloat(t.amount)
-        };
-      });
-      setTransactions(mapped);
+      if(resDash.ok) {
+        const dashData = await resDash.json();
+        setSummary({
+          totalIncome: dashData.totalIncome || 0,
+          totalExpense: dashData.totalExpense || 0,
+          balance: dashData.balance || 0
+        });
+      }
+
+      if(resTx.ok) {
+        const data = await resTx.json();
+        const mapped = data.map(t => {
+          const hasDetails = t.description.includes(' - ');
+          return {
+            ...t,
+            name: hasDetails ? t.description.split(' - ')[0] : t.description,
+            desc: hasDetails ? t.description.substring(t.description.indexOf(' - ') + 3) : '',
+            val: t.type === 'expense' ? -parseFloat(t.amount) : parseFloat(t.amount)
+          };
+        });
+        setTransactions(mapped);
+      }
+
+      if(resCat.ok) setChartData(await resCat.json());
+      if(resAllCat.ok) setCategories(await resAllCat.json());
+
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
     }
-
-    const resCat = await fetch(`${API_URL}/categories/summary?user_id=${user.id}&start_date=${startStr}&end_date=${endStr}`);
-    if(resCat.ok) setChartData(await resCat.json());
-
-    const resAllCat = await fetch(`${API_URL}/config/categories`);
-    if(resAllCat.ok) setCategories(await resAllCat.json());
   };
 
   useEffect(() => { loadData(); }, [targetDate, user.id]);
@@ -113,7 +128,7 @@ export default function Dashboard({ user }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        ) : <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhum gasto registrado neste ciclo.</p>}
+        ) : <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhum gasto registado neste ciclo.</p>}
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm">
@@ -139,7 +154,7 @@ export default function Dashboard({ user }) {
                     </div>
                     <div className="flex justify-end gap-2 mt-2">
                       <button onClick={() => setEditingId(null)} className="flex items-center gap-1 bg-gray-400 text-white px-3 py-1 rounded"><X size={16}/> Cancelar</button>
-                      <button onClick={() => saveEdit(t.id)} className="flex items-center gap-1 bg-[#038C8C] text-white px-3 py-1 rounded"><Check size={16}/> Salvar</button>
+                      <button onClick={() => saveEdit(t.id)} className="flex items-center gap-1 bg-[#038C8C] text-white px-3 py-1 rounded"><Check size={16}/> Guardar</button>
                     </div>
                   </div>
                 ) : (
@@ -158,7 +173,7 @@ export default function Dashboard({ user }) {
               </div>
             ))}
           </div>
-        ) : <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhuma transação registrada neste ciclo.</p>}
+        ) : <p className="text-sm text-[#025E73] text-center py-6 border border-dashed border-[#84BFB9] rounded-lg">Nenhuma transação registada neste ciclo.</p>}
       </div>
     </div>
   );
