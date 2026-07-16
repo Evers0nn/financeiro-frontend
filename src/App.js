@@ -7,25 +7,36 @@ const CHART_COLORS = [COLORS.dark, COLORS.deep, COLORS.teal, COLORS.aqua];
 const API_URL = 'https://financeiro-backend-7pzo.onrender.com/api'; 
 
 // ==========================================
-// COMPONENTE: TELA DE LOGIN (Conectada ao Backend)
+// COMPONENTE: TELA DE LOGIN
 // ==========================================
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [savedAccounts, setSavedAccounts] = useState(() => {
+    try { const acc = localStorage.getItem('fincontrol_accounts'); return acc ? JSON.parse(acc) : []; } catch(e) { return []; }
+  });
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const handleLogin = async (e, quickUser = null) => {
+    if(e) e.preventDefault();
     setError('');
+    
+    // Se clicou no botão rápido, usa a senha '1234' como atalho (apenas para facilitar testes locais)
+    const finalUser = quickUser || username;
+    const finalPass = quickUser ? '1234' : password;
+
     try {
       const res = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username: finalUser, password: finalPass })
       });
       
       if (res.ok) {
         const data = await res.json();
+        // Salva na lista de contas recentes do navegador
+        try { const updated = [...new Set([...savedAccounts, finalUser])]; localStorage.setItem('fincontrol_accounts', JSON.stringify(updated)); } catch(e) {}
+        
         localStorage.setItem('fincontrol_user', JSON.stringify(data.user));
         onLogin(data.user);
       } else {
@@ -42,8 +53,28 @@ function LoginScreen({ onLogin }) {
         <div className="flex justify-center mb-8">
           <img src="/logo.png" alt="Logo" className="h-16 w-auto" />
         </div>
+        
+        {/* Lista de contas salvas */}
+        {savedAccounts.length > 0 && (
+          <div className="mb-6 pb-6 border-b border-[#84BFB9]">
+            <p className="text-sm text-center text-[#025E73] mb-3">Acessar com conta salva:</p>
+            <div className="space-y-2">
+              {savedAccounts.map((acc, idx) => (
+                <button 
+                  key={idx} 
+                  onClick={() => handleLogin(null, acc)}
+                  className="w-full bg-[#F2F2EB] hover:bg-[#84BFB9] hover:text-white text-[#033859] border border-[#84BFB9] p-3 rounded-lg transition flex items-center justify-center gap-2 font-medium"
+                >
+                  <div className="w-6 h-6 bg-[#038C8C] rounded-full flex items-center justify-center text-xs text-white uppercase">{acc.charAt(0)}</div>
+                  {acc}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-4">
-          <p className="text-sm text-center text-[#025E73] font-medium">Acesse sua conta</p>
+          <p className="text-sm text-center text-[#025E73] font-medium">Ou entre com uma nova conta</p>
           {error && <p className="text-red-500 text-sm text-center font-bold">{error}</p>}
           <div>
             <label className="block text-sm font-medium text-[#025E73] mb-1">Usuário</label>
@@ -89,13 +120,22 @@ function Dashboard({ user }) {
     const resTx = await fetch(`${API_URL}/transactions?user_id=${user.id}&month=${month}&year=${year}`);
     if(resTx.ok) {
       const data = await resTx.json();
-      setTransactions(data.map(t => ({ ...t, val: t.type === 'expense' ? -parseFloat(t.amount) : parseFloat(t.amount) })));
+      const mapped = data.map(t => {
+        const hasDetails = t.description.includes(' - ');
+        return {
+          ...t,
+          name: hasDetails ? t.description.split(' - ')[0] : t.description,
+          desc: hasDetails ? t.description.substring(t.description.indexOf(' - ') + 3) : '',
+          val: t.type === 'expense' ? -parseFloat(t.amount) : parseFloat(t.amount)
+        };
+      });
+      setTransactions(mapped);
     }
 
     const resCat = await fetch(`${API_URL}/categories/summary?user_id=${user.id}&month=${month}&year=${year}`);
     if(resCat.ok) setChartData(await resCat.json());
 
-    // Carrega categorias para o select de edição
+    // Carrega categorias do banco para o datalist de edição
     const resAllCat = await fetch(`${API_URL}/config/categories`);
     if(resAllCat.ok) setCategories(await resAllCat.json());
   };
@@ -103,10 +143,13 @@ function Dashboard({ user }) {
   useEffect(() => { loadData(); }, [currentDate, user.id]);
 
   const saveEdit = async (id) => {
+    // Junta Título e Descrição antes de salvar se houver descrição
+    const finalDescription = editForm.desc ? `${editForm.name} - ${editForm.desc}` : editForm.name;
+    
     await fetch(`${API_URL}/transactions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...editForm, user_id: user.id })
+      body: JSON.stringify({ ...editForm, description: finalDescription, user_id: user.id })
     });
     setEditingId(null);
     loadData();
@@ -161,9 +204,15 @@ function Dashboard({ user }) {
               <div key={t.id} className="border-b pb-2">
                 {editingId === t.id ? (
                   <div className="bg-[#F2F2EB] p-3 rounded-lg border border-[#84BFB9] space-y-3">
-                    <div>
-                      <label className="text-xs text-[#025E73]">Descrição</label>
-                      <input className="w-full p-2 rounded border border-gray-300" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-[#025E73]">Título</label>
+                        <input className="w-full p-2 rounded border border-gray-300" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-[#025E73]">Descrição (Opcional)</label>
+                        <input className="w-full p-2 rounded border border-gray-300" value={editForm.desc} onChange={e => setEditForm({...editForm, desc: e.target.value})} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -177,9 +226,10 @@ function Dashboard({ user }) {
                     </div>
                     <div>
                       <label className="text-xs text-[#025E73]">Categoria</label>
-                      <select className="w-full p-2 rounded border border-gray-300" value={editForm.category_id} onChange={e => setEditForm({...editForm, category_id: e.target.value})}>
+                      <input list="edit-cats" className="w-full p-2 rounded border border-gray-300" value={editForm.category_id} onChange={e => setEditForm({...editForm, category_id: e.target.value})} />
+                      <datalist id="edit-cats">
                         {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                      </select>
+                      </datalist>
                     </div>
                     <div className="flex justify-end gap-2 mt-2">
                       <button onClick={() => setEditingId(null)} className="flex items-center gap-1 bg-gray-400 text-white px-3 py-1 rounded"><X size={16}/> Cancelar</button>
@@ -189,14 +239,15 @@ function Dashboard({ user }) {
                 ) : (
                   <div className="flex justify-between items-center hover:bg-gray-50 p-2 rounded transition">
                     <div>
-                      <p className="font-semibold text-[#033859]">{t.description}</p>
+                      <p className="font-semibold text-[#033859]">{t.name}</p>
                       <p className="text-xs text-[#025E73]">{t.category_id} • {t.transaction_date.split('-').reverse().join('/')}</p>
+                      {t.desc && <p className="text-xs text-gray-500">{t.desc}</p>}
                     </div>
                     <div className="flex items-center gap-3">
                       <p className={`font-bold ${t.val > 0 ? 'text-[#038C8C]' : 'text-red-500'}`}>
                         {t.val > 0 ? '+' : ''} R$ {Math.abs(t.val).toFixed(2)}
                       </p>
-                      <button onClick={() => { setEditingId(t.id); setEditForm({description: t.description, amount: Math.abs(t.val), category_id: t.category_id, transaction_date: t.transaction_date}); }} className="text-gray-400 hover:text-[#038C8C]">
+                      <button onClick={() => { setEditingId(t.id); setEditForm({name: t.name, desc: t.desc, amount: Math.abs(t.val), category_id: t.category_id, transaction_date: t.transaction_date}); }} className="text-gray-400 hover:text-[#038C8C]">
                         <Edit2 size={16} />
                       </button>
                     </div>
@@ -212,17 +263,14 @@ function Dashboard({ user }) {
 }
 
 // ==========================================
-// COMPONENTE: ENTRADAS (Com Data Escolhível)
+// COMPONENTE: ENTRADAS
 // ==========================================
 function Incomes({ user }) {
-  const [formData, setFormData] = useState({ desc: '', amount: '', cat: '', date: new Date().toISOString().split('T')[0] });
+  const [formData, setFormData] = useState({ name: '', desc: '', amount: '', cat: '', date: new Date().toISOString().split('T')[0] });
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    fetch(`${API_URL}/config/categories?type=income`)
-      .then(res => res.json())
-      .then(data => setCategories(data))
-      .catch(() => {});
+    fetch(`${API_URL}/config/categories?type=income`).then(r => r.json()).then(d => setCategories(d)).catch(()=>{});
   }, []);
 
   const handleSubmit = async (e) => {
@@ -233,14 +281,14 @@ function Incomes({ user }) {
       body: JSON.stringify({
         user_id: user.id,
         category_id: formData.cat || 'Outros',
-        description: formData.desc,
+        description: formData.desc ? `${formData.name} - ${formData.desc}` : formData.name,
         amount: parseFloat(formData.amount),
         transaction_date: formData.date,
         payment_method: 'money'
       })
     });
     alert('Entrada salva!');
-    setFormData({ desc: '', amount: '', cat: '', date: new Date().toISOString().split('T')[0] });
+    setFormData({ name: '', desc: '', amount: '', cat: '', date: new Date().toISOString().split('T')[0] });
   };
 
   return (
@@ -248,8 +296,12 @@ function Incomes({ user }) {
       <h2 className="text-2xl font-bold mb-6 text-[#038C8C]">Nova Entrada</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-[#025E73] mb-1">Descrição</label>
-          <input type="text" required value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Ex: Salário de Dezembro" />
+          <label className="block text-sm font-medium text-[#025E73] mb-1">Título (Obrigatório)</label>
+          <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Ex: Salário" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[#025E73] mb-1">Descrição (Opcional)</label>
+          <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Detalhes adicionais..." />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -263,10 +315,8 @@ function Incomes({ user }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-[#025E73] mb-1">Categoria</label>
-          <select value={formData.cat} onChange={e => setFormData({...formData, cat: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" required>
-            <option value="">Selecione...</option>
-            {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-          </select>
+          <input list="income-cats" value={formData.cat} onChange={e => setFormData({...formData, cat: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Escolha ou digite..." required />
+          <datalist id="income-cats">{categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</datalist>
         </div>
         <button type="submit" className="w-full bg-[#038C8C] text-white font-bold py-3 rounded-lg mt-4">Registrar Entrada</button>
       </form>
@@ -275,10 +325,10 @@ function Incomes({ user }) {
 }
 
 // ==========================================
-// COMPONENTE: SAÍDAS E PARCELAMENTOS (Dinâmico)
+// COMPONENTE: SAÍDAS E PARCELAMENTOS
 // ==========================================
 function Expenses({ user }) {
-  const [formData, setFormData] = useState({ desc: '', amount: '', cat: '', method: '', card: '', inst: 1, date: new Date().toISOString().split('T')[0] });
+  const [formData, setFormData] = useState({ name: '', desc: '', amount: '', cat: '', method: '', card: '', inst: 1, date: new Date().toISOString().split('T')[0] });
   const [categories, setCategories] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [creditCards, setCreditCards] = useState([]);
@@ -297,7 +347,7 @@ function Expenses({ user }) {
       body: JSON.stringify({
         user_id: user.id,
         category_id: formData.cat, 
-        description: formData.desc,
+        description: formData.desc ? `${formData.name} - ${formData.desc}` : formData.name,
         amount: parseFloat(formData.amount),
         transaction_date: formData.date,
         payment_method: formData.method,
@@ -306,7 +356,7 @@ function Expenses({ user }) {
       })
     });
     alert('Saída salva!');
-    setFormData({ desc: '', amount: '', cat: '', method: '', card: '', inst: 1, date: new Date().toISOString().split('T')[0] });
+    setFormData({ name: '', desc: '', amount: '', cat: '', method: '', card: '', inst: 1, date: new Date().toISOString().split('T')[0] });
   };
 
   return (
@@ -314,8 +364,12 @@ function Expenses({ user }) {
       <h2 className="text-2xl font-bold mb-6 text-red-600">Nova Saída</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-[#025E73] mb-1">Descrição</label>
-          <input type="text" required value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Ex: Mercado" />
+          <label className="block text-sm font-medium text-[#025E73] mb-1">Título (Obrigatório)</label>
+          <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Ex: Mercado" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[#025E73] mb-1">Descrição (Opcional)</label>
+          <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Detalhes adicionais..." />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -331,10 +385,8 @@ function Expenses({ user }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-[#025E73] mb-1">Categoria</label>
-            <select value={formData.cat} onChange={e => setFormData({...formData, cat: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" required>
-              <option value="">Selecione...</option>
-              {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
+            <input list="expense-cats" value={formData.cat} onChange={e => setFormData({...formData, cat: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Escolha ou digite..." required />
+            <datalist id="expense-cats">{categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</datalist>
           </div>
           <div>
             <label className="block text-sm font-medium text-[#025E73] mb-1">Pagamento</label>
@@ -349,10 +401,10 @@ function Expenses({ user }) {
           <div className="grid grid-cols-2 gap-4 p-4 bg-[#F2F2EB] rounded-lg border border-[#84BFB9]">
             <div>
               <label className="block text-sm font-medium text-[#025E73] mb-1">Cartão</label>
-              <select required value={formData.card} onChange={e => setFormData({...formData, card: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg">
-                <option value="">Selecione...</option>
+              <input list="credit-cards-list" required value={formData.card} onChange={e => setFormData({...formData, card: e.target.value})} className="w-full p-3 border border-[#84BFB9] rounded-lg" placeholder="Escolha ou digite..." />
+              <datalist id="credit-cards-list">
                 {creditCards.map(card => <option key={card.name} value={card.name}>{card.name}</option>)}
-              </select>
+              </datalist>
             </div>
             <div>
               <label className="block text-sm font-medium text-[#025E73] mb-1">Parcelas</label>
